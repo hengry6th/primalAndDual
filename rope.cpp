@@ -228,6 +228,8 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             double pi = 1 / (d_t * d_t / m->mass + 1 / obj->k);
             // update lambda
             auto d_lam = alpha * pi * hi;
+            //calculate lambda
+            c->lambda += d_lam;
             //calculate friction
             Vec3d tengent = -1 * n;
             if (n.z != 0) {
@@ -246,28 +248,34 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             double Ry = m->mass / (pow(norm_n.y, 2) + pow(tengent.y, 2) + pow(tengent2.y, 2));
             double Rz = m->mass / (pow(norm_n.z, 2) + pow(tengent.z, 2) + pow(tengent2.z, 2));
 
+            double Axy = -1 * (n.x * n.y + tengent.x * tengent.y + tengent2.x * tengent2.y) * c->lambda;
+            double Axz = -1 * (n.x * n.z + tengent.x * tengent.z + tengent2.x * tengent2.z) * c->lambda;
+            double Ayz = -1 * (n.y * n.z + tengent.y * tengent.z + tengent2.y * tengent2.z) * c->lambda;
+
+            double Ax = Axy * n.y + Axz * n.z;
+            double Ay = Axy * n.x + Ayz * n.z;
+            double Az = Axz * n.x + Ayz * n.y;
+
             Vec3d Jx = Vec3d(norm_n.x, tengent.x, tengent2.x);
             Vec3d Jy = Vec3d(norm_n.y, tengent.y, tengent2.y);
             Vec3d Jz = Vec3d(norm_n.z, tengent.z, tengent2.z);
 
-            double Jux = -1.5 * Rx * Jx.dot(m->velocity);
-            double Juy = -1.5 * Ry * Jy.dot(m->velocity);
-            double Juz = -1.5 * Rz * Jy.dot(m->velocity);
+            double Jux = 1.5 * Rx * Jx.dot(m->velocity);
+            double Juy = 1.5 * Ry * Jy.dot(m->velocity);
+            double Juz = 1.5 * Rz * Jy.dot(m->velocity);
 
-            double tJMhx = d_t * Jx.dot(gravity) / m->mass;
-            double tJMhy = d_t * Jy.dot(gravity) / m->mass;
-            double tJMhz = d_t * Jz.dot(gravity) / m->mass;
+            double tJMhx = Rx * d_t * Jx.dot(gravity) / m->mass;
+            double tJMhy = Ry * d_t * Jy.dot(gravity) / m->mass;
+            double tJMhz = Rz * d_t * Jz.dot(gravity) / m->mass;
 
-            double zx = Jux - tJMhx;
-            double zy = Juy - tJMhy;
-            double zz = Juz - tJMhz;
-
-            c->lambda += d_lam;
+            double zx = Ax - Jux - tJMhx;
+            double zy = Ay - Juy - tJMhy;
+            double zz = Az - Juz - tJMhz;
 
             Vec3d lambda_f;
 
             double norm2 = zx * zx + zy * zy + zz * zz;
-            double mu_lambda = obj->mu * c->lambda;
+            double mu_lambda = obj->mu * c->lambda * n.norm() * 2;
             lambda_f = Vec3d(zx, zy, zz);
 
             if (norm2 > mu_lambda * mu_lambda) {
