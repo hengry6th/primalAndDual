@@ -248,13 +248,13 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             double Ry = m->mass / (pow(norm_n.y, 2) + pow(tengent.y, 2) + pow(tengent2.y, 2));
             double Rz = m->mass / (pow(norm_n.z, 2) + pow(tengent.z, 2) + pow(tengent2.z, 2));
 
-            double Axy = -1 * (n.x * n.y + tengent.x * tengent.y + tengent2.x * tengent2.y) * c->lambda;
-            double Axz = -1 * (n.x * n.z + tengent.x * tengent.z + tengent2.x * tengent2.z) * c->lambda;
-            double Ayz = -1 * (n.y * n.z + tengent.y * tengent.z + tengent2.y * tengent2.z) * c->lambda;
+            double Axy = -1  * (n.x * n.y + tengent.x * tengent.y + tengent2.x * tengent2.y) * c->lambda;
+            double Axz = -1 * Ry * (n.x * n.z + tengent.x * tengent.z + tengent2.x * tengent2.z) * c->lambda;
+            double Ayz = -1 * Rz * (n.y * n.z + tengent.y * tengent.z + tengent2.y * tengent2.z) * c->lambda;
 
-            double Ax = Axy * n.y + Axz * n.z;
-            double Ay = Axy * n.x + Ayz * n.z;
-            double Az = Axz * n.x + Ayz * n.y;
+            double Ax = (Axy * n.y + Axz * n.z) * Rx * 2;
+            double Ay = (Axy * n.x + Ayz * n.z) * Ry * 2;
+            double Az = (Axz * n.x + Ayz * n.y) * Rz * 2;
 
             Vec3d Jx = Vec3d(norm_n.x, tengent.x, tengent2.x);
             Vec3d Jy = Vec3d(norm_n.y, tengent.y, tengent2.y);
