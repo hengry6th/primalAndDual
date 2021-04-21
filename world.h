@@ -7,6 +7,7 @@
 
 #include "rope.h"
 #include "other_obj.h"
+#include "output.h"
 
 enum step_types {Euler, Verlet, Prime, Dual};
 
@@ -19,6 +20,11 @@ private:
     vector<Rope*> ropes;
     vector<int> types;
     vector<sphere*> objs;
+    Files_in_obj f;
+
+    double primal_condi_num = 0;
+    double dual_condi_num = 0;
+
 public:
     //defalt dt = 0.025 or 40fps;
     World():dt(0.025), gravity(Vec3d(0, 0, 0)){}
@@ -79,15 +85,14 @@ public:
         if (!ropes.empty()) {
             ropes[0]->output_begin(index);
             for (auto& r : ropes) {
-                r->stream_out();
+                r->stream_out(objs);
             }
             ropes[0]->output_end();
         } else {
             rope->output_begin(index);
-            rope->stream_out();
+            rope->stream_out(objs);
             rope->output_end();
         }
-
     }
 
     vector<Rope*>& get_all_ropes() {
@@ -97,6 +102,42 @@ public:
     void add_obj(sphere* obj) { objs.push_back(obj); }
 
     vector<sphere*>& get_objs() { return objs; };
+
+    void start_print_rope_ratio(string type) {
+        string f_name1 = "dual_" + type;
+        string f_name2 = "primal_" + type;
+        f.open_f(f_name1, f_name2);
+    }
+
+    void reset_condi_num() {
+        primal_condi_num = 0;
+        dual_condi_num = 0;
+    }
+
+    void count_rope_ratio() {
+        primal_condi_num += ropes[1]->condiction_num;
+        dual_condi_num += ropes[0]->condiction_num;
+    }
+
+    void print_rope_ratio(int step_count,int ratio_type) {
+        if (ratio_type == 0) {
+            f.print_ratio_and_condiction_num(ropes[0]->m_ratio, dual_condi_num/step_count, ropes[1]->m_ratio, primal_condi_num/step_count);
+        } else {
+            f.print_ratio_and_condiction_num(ropes[0]->k_ratio, dual_condi_num/step_count, ropes[1]->k_ratio, primal_condi_num/step_count);
+        }
+    }
+
+    void end_print_rope_ratio() {
+        f.close_f_all();
+    }
+
+    void clear_ropes() {
+        for(auto r : ropes) {
+            delete r;
+        }
+        ropes.clear();
+        types.clear();
+    }
 };
 
 #endif //REBUILD_AT_CLION_WORLD_H

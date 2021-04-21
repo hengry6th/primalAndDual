@@ -15,6 +15,7 @@
 #include "mass.h"
 #include "spring.h"
 #include <string>
+#include <fstream>
 #include "output.h"
 #include "other_obj.h"
 
@@ -43,6 +44,9 @@ private:
     void clear_constrains();
 
 public:
+    double m_ratio = 0;
+    double k_ratio = 0;
+    double condiction_num;
     Rope(vector<Mass*>& masses, vector<Spring*>& springs)
             :masses(masses), springs(springs) {};
     Rope(vector<Mass*>& masses, vector<Spring*>& springs, vector<Spring*>& v_spr)
@@ -82,12 +86,16 @@ public:
     vector<Spring*>& get_springs() { return springs; }
     void output_2_obj(int step_index);
     void output_begin(int step_index) { f.make_New_file(step_index); }
-    void stream_out() {
+    void stream_out(vector<sphere *>objs) {
         for (auto& m : masses) f.add_point(m->position);
         for (auto& s : visual_spr) f.add_edge(s->m1->id, s->m2->id);
+        for (auto& o : objs) f.add_point(o->center);
     }
     void output_end() { f.close_f(); }
     const vector<Spring*> get_vs() const { return visual_spr; }
+
+    void print_m_ratio_and_condiction_num(FILE *f, int count);
+    void print_k_ratio_and_condiction_num(FILE *f, int count);
 };
 #endif // !ROPE_H
 

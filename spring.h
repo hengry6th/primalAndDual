@@ -31,7 +31,8 @@ struct constrain {
     sphere* obj;
 
     double lambda;
-    Vec3d lambda_f = Vec3d(0, 0, 0);
+    double lambda_f_1;
+    double lambda_f_2;
 
     Mass* m;
 

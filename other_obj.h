@@ -13,7 +13,7 @@ struct sphere {
     double k;
     double mu;
     sphere(Vec3d c, double r, double k_in, double u)
-            : center(c), radius(r), k(k_in), mu(u) {};
+            : center(c), radius(r * 1.05), k(k_in), mu(u) {};
     bool is_in(Vec3d m_p) const { return (m_p - center).norm() < radius; }
 };
 #endif //REBUILD_AT_CLION_OTHER_OBJECT_H
