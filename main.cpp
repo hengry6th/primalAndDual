@@ -201,7 +201,7 @@ int main() {
     world->set_g(Vec3d(0, -9.8, 0));
 
     build_cloth(10, 10, 1);
-    build_spheres(0, 0, -0, 10, 10, 0.9);
+    build_spheres(0, 0, -0, 10, 100, 0.9);
     //build_ropes_m();
 
     world->set_rope(rope);

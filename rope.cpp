@@ -8,7 +8,7 @@
 #include "rope.h"
 #include "output.h"
 #include "vec3d.h"
-
+#include <float.h>
 #define kd 0.00005
 const double MAX_ITERATE = 200;
 const double  alpha =  1 / MAX_ITERATE;
@@ -195,7 +195,7 @@ void Rope::simulatePrime(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
         cal_force();
         cal_prim_Jaco(delta_t);
         double max_p = 0;
-        double min_p = MAXFLOAT;
+        double min_p = FLT_MAX ;
         for (auto& m : masses) {
             if (!m->pinned) {
                 //build predictioner PD
@@ -237,7 +237,7 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
         double lambda_n_k = 0;
         double lambda_f_1_k = 0;
         double lambda_f_2_k = 0;
-        double r_k = MAXFLOAT, r_k_1 = MAXFLOAT;
+        double r_k = FLT_MAX , r_k_1 = FLT_MAX ;
 
         Vec3d lambda = Vec3d(lambda_n_k, lambda_f_1_k, lambda_f_2_k);
         Vec3d n = m->position - obj->center;
@@ -254,27 +254,29 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
         tengent /= tengent.norm();
         tengent2 /= tengent2.norm();
 
-        Vec3d Jx = Vec3d(n.x, tengent.x, tengent2.x);
-        Vec3d Jy = Vec3d(n.y, tengent.y, tengent2.y);
-        Vec3d Jz = Vec3d(n.z, tengent.z, tengent2.z);
+        Vec3d JT_r0 = Vec3d(n.x, tengent.x, tengent2.x);
+        Vec3d JT_r1 = Vec3d(n.y, tengent.y, tengent2.y);
+        Vec3d JT_r2 = Vec3d(n.z, tengent.z, tengent2.z);
 
-        double  Axx = n.norm();//n.x * n.x + tengent.x * tengent.x + tengent2.x + tengent2.x;
-        double  Ayy = tengent.norm();//n.y * n.y + tengent.y * tengent.y + tengent2.y + tengent2.y;
-        double  Azz = tengent2.norm();//n.z * n.z + tengent.z * tengent.z + tengent2.z + tengent2.z;
+        double  Axx = n.squaredNorm();
+        double  Ayy = tengent.squaredNorm();
+        double  Azz = tengent2.squaredNorm();
 
         Vec3d R = Vec3d(1 / Axx,1 / Ayy, 1 / Azz);
         R *= m->mass;
 
         Vec3d b = Vec3d(1.5 * n.dot(m->velocity), tengent.dot(m->velocity), tengent2.dot(m->velocity))
-                + d_t * Vec3d(n.dot(gravity), tengent.dot(gravity), tengent2.dot(gravity)) / m->mass;
+                + d_t * Vec3d(n.dot(gravity), tengent.dot(gravity), tengent2.dot(gravity));
         Vec3d vn = m->velocity.dot(n) * n;
-        while (k <= MAX_ITERATE && r_k_1 > 0.01) {
-            // claculate z & w
-            Vec3d w = Vec3d(Jx.dot(lambda), Jy.dot(lambda), Jz.dot(lambda)) / c->m->mass;
+        while (r_k_1 > 1.0e-6) {
+            // calculate z & w
+            Vec3d w = Vec3d(JT_r0.dot(lambda), JT_r1.dot(lambda), JT_r2.dot(lambda)) / m->mass;
             Vec3d AL_B = Vec3d(n.dot(w), tengent.dot(w), tengent2.dot(w)) + b;
             Vec3d z = lambda - Vec3d(R.x * AL_B.x, R.y * AL_B.y, R.z * AL_B.z);
-
+            // Eq 21a: solution of Eq 20a
             lambda_n_k = max(0.0, z.x);
+            // Eq 21b: solution of Eq 20b
+            // Assumption: the friction cone is a sphere, the projection of this sphere on tangent plane is a circle.
             double l2 = z.y * z.y + z.z * z.z;
             double muln = obj->mu * lambda.x;
             if (l2 > (muln * muln)) {
@@ -289,7 +291,7 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             r_k_1 = max(abs(lambda_n_k - lambda.x), abs(lambda_f_1_k - lambda.y));
             r_k_1 = max(r_k_1, abs(lambda_f_2_k - lambda.z));
             if (r_k_1 > r_k) {
-                R *= obj->mu;
+                R *= 0.1;
             } else {
                 lambda.x = lambda_n_k;
                 lambda.y = lambda_f_1_k;
@@ -299,8 +301,11 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             }
             k++;
         }
-        m->velocity = m->velocity + (d_t * gravity + n * lambda.x + tengent * lambda.y + tengent2 * lambda.z) / m->mass;
-        m->position = m->position + d_t / 2 * m->velocity;
+        m->position = m->position + n * lambda.x + tengent * lambda.y + tengent2 * lambda.z;
+        m->velocity = (m->position - m->last_position)/d_t;
+
+        //m->velocity = m->velocity + ( n * lambda.x + tengent * lambda.y + tengent2 * lambda.z) / m->mass;
+        //m->position = m->position + d_t / 2 * m->velocity;
     }
 
     // release costrains
@@ -316,7 +321,7 @@ void Rope::simulateDual(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
     }
     for (int i = 0; i < MAX_ITERATE; i++) {
         double max_p = 0;
-        double min_p = MAXFLOAT;
+        double min_p = FLT_MAX ;
         //Evaluate constraints and derivatives
         for (auto& s : springs) {
             auto& m1 = s->m1;
