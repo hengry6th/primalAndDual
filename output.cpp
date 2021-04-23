@@ -25,8 +25,8 @@ void Files_in_obj::make_New_file(int index) {
     */
     //delete_file(del_path.data());
 
-    string ts = "output/rope_obj_" + to_string(index) + ".obj";
+    string ts = "../output/rope_obj_" + to_string(index) + ".obj";
     if (!(obj_f = fopen(ts.data(), "w+"))) {
-        cout << "openfail" << endl;
+        cout << "openfail" << obj_f << endl;
     };
 }
