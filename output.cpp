@@ -27,6 +27,6 @@ void Files_in_obj::make_New_file(int index) {
 
     string ts = "output/rope_obj_" + to_string(index) + ".obj";
     if (!(obj_f = fopen(ts.data(), "w+"))) {
-        cout << "openfail" << endl;
+        cout << "openfail" << obj_f << endl;
     };
 }

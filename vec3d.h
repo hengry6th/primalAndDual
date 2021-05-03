@@ -38,10 +38,6 @@ public:
         return Vec3d(x * B, y * B, z * B);
     }
 
-    Vec3d operator*(const double& B) {
-        return Vec3d(x * B, y * B, z * B);
-    }
-
     friend Vec3d operator*(const double &A, const Vec3d &B) {
         return Vec3d(A*B.x, A * B.y, A * B.z);
     }

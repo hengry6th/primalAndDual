@@ -34,7 +34,6 @@ struct Mass {
 
     //save the diag of Jacobian
     Vec3d P = Vec3d(0, 0, 0);
-
     //save every gradient
     Vec3d v_predict;
 

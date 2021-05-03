@@ -47,6 +47,9 @@ public:
     double m_ratio = 0;
     double k_ratio = 0;
     double condiction_num;
+    bool is_cloth = false;
+    int number_of_row = 0;
+    vector<sphere*> objs;
     Rope(vector<Mass*>& masses, vector<Spring*>& springs)
             :masses(masses), springs(springs) {};
     Rope(vector<Mass*>& masses, vector<Spring*>& springs, vector<Spring*>& v_spr)
@@ -88,8 +91,16 @@ public:
     void output_begin(int step_index) { f.make_New_file(step_index); }
     void stream_out(vector<sphere *>objs) {
         for (auto& m : masses) f.add_point(m->position);
-        for (auto& s : visual_spr) f.add_edge(s->m1->id, s->m2->id);
-        for (auto& o : objs) f.add_point(o->center);
+        for (auto& obj : objs) f.add_point(obj->center.position);
+        if (is_cloth) {
+            for (auto& s : visual_spr) f.add_edge(s->m1->id, s->m2->id);
+            for (int i = 1; i < masses.size() - number_of_row + 1; i++) {
+                if ((i % number_of_row) == 0) continue;
+                f.add_face(i, i + 1, i + number_of_row + 1, i + number_of_row);
+            }
+        } else {
+            for (auto& s : springs) f.add_edge(s->m1->id, s->m2->id);
+        }
     }
     void output_end() { f.close_f(); }
     const vector<Spring*> get_vs() const { return visual_spr; }

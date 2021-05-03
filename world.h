@@ -115,8 +115,8 @@ public:
     }
 
     void count_rope_ratio() {
-        primal_condi_num += ropes[1]->condiction_num;
         dual_condi_num += ropes[0]->condiction_num;
+        primal_condi_num += ropes[1]->condiction_num;
     }
 
     void print_rope_ratio(int step_count,int ratio_type) {
@@ -137,6 +137,10 @@ public:
         }
         ropes.clear();
         types.clear();
+    }
+
+    void add_objs_to_rope(){
+        rope->objs = this->objs;
     }
 };
 

@@ -8,10 +8,10 @@
 #include "rope.h"
 #include "output.h"
 #include "vec3d.h"
-
+#include <float.h>
 #define kd 0.00005
-const double MAX_ITERATE = 200;
-const double  alpha =  1 / MAX_ITERATE;
+const double MAX_ITERATE = 50;
+const double  alpha =  1.0 / MAX_ITERATE;
 
 const double kf = 1;
 
@@ -91,6 +91,13 @@ void Rope::simulateVerlet(float delta_t, Vec3d gravity) {
 }
 
 void Rope::make_constrains(vector<sphere*>& objs) {
+
+    for (auto obj : objs) {
+        obj->center.forces = Vec3d(0, 0, 0);
+        obj->center.P = Vec3d(0, 0, 0);
+        obj->center.Lmabda = 0;
+    }
+
     for (Mass* m : masses) {
         for (auto obj : objs) {
             if (obj->is_in(m->position)) {
@@ -127,7 +134,7 @@ void Rope::contact_penalty(double d_t) {
         for (auto c : constrains) {
             Mass* m = c->m;
             auto obj = c->obj;
-            Vec3d n = m->position - obj->center;
+            Vec3d n = m->position - obj->center.position;
 
             Vec3d tengent = -1 * n;
             if (n.z != 0) {
@@ -140,25 +147,27 @@ void Rope::contact_penalty(double d_t) {
             tengent /= tengent.norm();
             tengent2 /= tengent2.norm();
 
-            const Vec3d* v = &(m->velocity);
-
             double u1 = tengent.dot(m->velocity);
             double u2 = tengent2.dot(m->velocity);
 
             double n_norm = n.norm();
 
             double ci = n_norm - obj->radius;
-            m->forces -= n / n_norm * obj->k * min(0.0, ci);
+            m->forces -= 2 * n / n_norm * obj->k * min(0.0, ci);
 
             double squrt_u = sqrt(u1 * u1 + u2 * u2);
             double uf = obj->mu * m->forces.norm() ;
             m->forces -= min(kf, uf/squrt_u) * (u1 * tengent + u2 * tengent2);
             m->Lmabda = kf * squrt_u < uf ? kf : uf / squrt_u;
 
+            obj->center.forces += m->forces;
+            obj->center.Lmabda -= m->Lmabda;
+
             double x2 = n.x * n.x / n_norm;
             double y2 = n.y * n.y / n_norm;
             double z2 = n.z * n.z / n_norm;
             m->P += d_t * obj->k * Vec3d(x2, y2, z2);
+            obj->center.P -= m->P;
         }
 
         // the same as in simulate
@@ -170,7 +179,23 @@ void Rope::contact_penalty(double d_t) {
             Vec3d d = m->mass * (m->velocity - m->v_predict) - d_t * m->forces;
             //update m's state
             m->velocity -= alpha * Vec3d(d.x * m->P.x, d.y * m->P.y, d.z * m->P.z);
-            //m->velocity -= alpha * m->Lmabda * d;
+            m->velocity -= alpha * m->Lmabda * d;
+            //not rigid body, G = E
+            m->position = m->last_position + d_t * m->velocity;
+        }
+    }
+
+    for (auto obj : this->objs) {
+        Mass *m = &obj->center;
+        if (!m->pinned) {
+            m->P.x = 1 / (m->mass + d_t * m->P.x);
+            m->P.y = 1 / (m->mass + d_t * m->P.y);
+            m->P.z = 1 / (m->mass + d_t * m->P.z);
+            //calculate gradient
+            Vec3d d = m->mass * (m->velocity - m->v_predict) - d_t * m->forces;
+            //update m's state
+            m->velocity -= alpha * Vec3d(d.x * m->P.x, d.y * m->P.y, d.z * m->P.z);
+            m->velocity -= alpha * m->Lmabda * d;
             //not rigid body, G = E
             m->position = m->last_position + d_t * m->velocity;
         }
@@ -195,7 +220,7 @@ void Rope::simulatePrime(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
         cal_force();
         cal_prim_Jaco(delta_t);
         double max_p = 0;
-        double min_p = MAXFLOAT;
+        double min_p = FLT_MAX ;
         for (auto& m : masses) {
             if (!m->pinned) {
                 //build predictioner PD
@@ -208,18 +233,29 @@ void Rope::simulatePrime(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
                 m->velocity -= alpha * Vec3d(d.x * m->P.x, d.y * m->P.y, d.z * m->P.z);
                 //not rigid body, G = E
                 m->position = m->last_position + delta_t * m->velocity;
-                /*
                 max_p = max(
-                        max(max(abs( 1 / m->P.x), abs( 1 / m->P.y)),abs(1 / m->P.z)),max_p);
+                        max(max(abs( 1 / m->P.x), abs(1 / m->P.y)),abs(1 / m->P.z)),max_p);
+
                 min_p = min(
                         min(min(abs(1 / m->P.x), abs(1 / m->P.y)),abs(1 / m->P.z)),min_p);
-                */
+
             }
         }
-      //  condiction_num += max_p / min_p;
+      condiction_num += max_p / min_p;
     }
-    //condiction_num /= MAX_ITERATE;
+    condiction_num /= MAX_ITERATE;
     //Perform collision detection;
+
+    for (auto& obj : objs) {
+        Mass *m = &obj->center;
+        if (!m->pinned) {
+            m->P = Vec3d(1 / m->mass, 1 / m->mass, 1 / m->mass);
+            Vec3d d = m->mass * (m->velocity - m->v_predict);
+            m->velocity -= alpha * Vec3d(d.x * m->P.x, d.y * m->P.y, d.z * m->P.z);
+            //not rigid body, G = E
+            m->position = m->last_position + delta_t * m->velocity;
+        }
+    }
 
     make_constrains(objs);
     if (!constrains.empty()) {
@@ -237,10 +273,10 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
         double lambda_n_k = 0;
         double lambda_f_1_k = 0;
         double lambda_f_2_k = 0;
-        double r_k = MAXFLOAT, r_k_1 = MAXFLOAT;
+        double r_k = FLT_MAX , r_k_1 = FLT_MAX ;
 
         Vec3d lambda = Vec3d(lambda_n_k, lambda_f_1_k, lambda_f_2_k);
-        Vec3d n = m->position - obj->center;
+        Vec3d n = m->position - obj->center.position;
         Vec3d tengent = -1 * n;
         if (n.z != 0) {
             tengent.z += n.squaredNorm() / n.z;
@@ -254,27 +290,28 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
         tengent /= tengent.norm();
         tengent2 /= tengent2.norm();
 
-        Vec3d Jx = Vec3d(n.x, tengent.x, tengent2.x);
-        Vec3d Jy = Vec3d(n.y, tengent.y, tengent2.y);
-        Vec3d Jz = Vec3d(n.z, tengent.z, tengent2.z);
+        Vec3d JT_r0 = Vec3d(n.x, tengent.x, tengent2.x);
+        Vec3d JT_r1 = Vec3d(n.y, tengent.y, tengent2.y);
+        Vec3d JT_r2 = Vec3d(n.z, tengent.z, tengent2.z);
 
-        double  Axx = n.norm();//n.x * n.x + tengent.x * tengent.x + tengent2.x + tengent2.x;
-        double  Ayy = tengent.norm();//n.y * n.y + tengent.y * tengent.y + tengent2.y + tengent2.y;
-        double  Azz = tengent2.norm();//n.z * n.z + tengent.z * tengent.z + tengent2.z + tengent2.z;
+        double  Axx = n.squaredNorm();
+        double  Ayy = tengent.squaredNorm();
+        double  Azz = tengent2.squaredNorm();
 
         Vec3d R = Vec3d(1 / Axx,1 / Ayy, 1 / Azz);
         R *= m->mass;
 
         Vec3d b = Vec3d(1.5 * n.dot(m->velocity), tengent.dot(m->velocity), tengent2.dot(m->velocity))
-                + d_t * Vec3d(n.dot(gravity), tengent.dot(gravity), tengent2.dot(gravity)) / m->mass;
-        Vec3d vn = m->velocity.dot(n) * n;
-        while (k <= MAX_ITERATE && r_k_1 > 0.01) {
-            // claculate z & w
-            Vec3d w = Vec3d(Jx.dot(lambda), Jy.dot(lambda), Jz.dot(lambda)) / c->m->mass;
+                + d_t * Vec3d(n.dot(gravity), tengent.dot(gravity), tengent2.dot(gravity));
+        while (r_k_1 > 1.0e-6) {
+            // calculate z & w
+            Vec3d w = Vec3d(JT_r0.dot(lambda), JT_r1.dot(lambda), JT_r2.dot(lambda)) / m->mass;
             Vec3d AL_B = Vec3d(n.dot(w), tengent.dot(w), tengent2.dot(w)) + b;
             Vec3d z = lambda - Vec3d(R.x * AL_B.x, R.y * AL_B.y, R.z * AL_B.z);
-
+            // Eq 21a: solution of Eq 20a
             lambda_n_k = max(0.0, z.x);
+            // Eq 21b: solution of Eq 20b
+            // Assumption: the friction cone is a sphere, the projection of this sphere on tangent plane is a circle.
             double l2 = z.y * z.y + z.z * z.z;
             double muln = obj->mu * lambda.x;
             if (l2 > (muln * muln)) {
@@ -289,7 +326,7 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             r_k_1 = max(abs(lambda_n_k - lambda.x), abs(lambda_f_1_k - lambda.y));
             r_k_1 = max(r_k_1, abs(lambda_f_2_k - lambda.z));
             if (r_k_1 > r_k) {
-                R *= obj->mu;
+                R *= 0.1;
             } else {
                 lambda.x = lambda_n_k;
                 lambda.y = lambda_f_1_k;
@@ -299,16 +336,24 @@ void Rope::contact_dual(double d_t, Vec3d gravity) {
             }
             k++;
         }
-        m->velocity = m->velocity + (d_t * gravity + n * lambda.x + tengent * lambda.y + tengent2 * lambda.z) / m->mass;
-        m->position = m->position + d_t / 2 * m->velocity;
+        m->position = m->position + n * lambda.x + tengent * lambda.y + tengent2 * lambda.z;
+        m->velocity += (n * lambda.x + tengent * lambda.y + tengent2 * lambda.z) / m->mass;
+        obj->center.forces -= (n * lambda.x + tengent * lambda.y + tengent2 * lambda.z);
     }
-
+    for (auto obj : objs) {
+        Mass *m = &obj->center;
+        if (m->forces.y + gravity.y >= 0) m->pinned = true;
+        if (!m->pinned) {
+            m->velocity += m->forces / m->mass * d_t;
+            m->position += m->velocity * d_t;
+        }
+    }
     // release costrains
     constrains.clear();
 }
 
 void Rope::simulateDual(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
-    condiction_num = 0;
+    // condiction_num = 0;
     init_v_p(delta_t, gravity);
     //initialize lambda
     for (auto& s : springs) {
@@ -316,7 +361,7 @@ void Rope::simulateDual(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
     }
     for (int i = 0; i < MAX_ITERATE; i++) {
         double max_p = 0;
-        double min_p = MAXFLOAT;
+        double min_p = FLT_MAX ;
         //Evaluate constraints and derivatives
         for (auto& s : springs) {
             auto& m1 = s->m1;
@@ -345,7 +390,6 @@ void Rope::simulateDual(float delta_t, Vec3d gravity, vector<sphere*>& objs) {
         condiction_num += max_p / min_p;
     }
     condiction_num /= MAX_ITERATE;
-
     //Perform collision detection;
     make_constrains(objs);
     if (!constrains.empty()) {
@@ -403,6 +447,17 @@ inline void Rope::init_v_p(double dt, Vec3d gravity) {
             m->last_position = m->position;
             m->position += dt * m->velocity;
         }
+    }
 
+    for (auto& obj:this->objs) {
+        Mass* m = &obj->center;
+        if (!m->pinned) {
+            // u+ = u~
+            m->velocity += dt * gravity;
+            m->v_predict = m->velocity;
+            // p+ = p- + dt * G * u
+            m->last_position = m->position;
+            m->position += dt * m->velocity;
+        }
     }
 }

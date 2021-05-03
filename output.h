@@ -28,6 +28,12 @@ public:
     void add_edge(int v, int u) {
         fprintf(obj_f, "l %d %d\n", v + 1, u + 1);
     }
+
+    void add_face(int v1, int v2, int v3, int v4) {
+        fprintf(obj_f, "f %d %d %d\n", v1, v2, v3);
+        fprintf(obj_f, "f %d %d %d\n", v1, v3, v4);
+    }
+
     void close_f() {
         fclose(obj_f);
     }
